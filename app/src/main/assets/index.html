@@ -7,56 +7,62 @@
 <title>Boom500 Codec Hunter</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;padding:18px;background:#101722;color:#fff;font-family:Arial,sans-serif}
-h2{color:#36d6a0;margin-bottom:4px}
-.sub{color:#91a0b5;font-size:13px}
-.card{background:#1c2939;border-radius:14px;padding:17px;margin:15px 0}
+body{margin:0;padding:16px;background:#101722;color:white;font-family:Arial,sans-serif}
+h2{color:#36d6a0}
+.sub,.small{color:#91a0b5;font-size:13px}
+.card{background:#1c2939;border-radius:14px;padding:16px;margin:14px 0}
 .price{font-size:34px;font-weight:bold;color:#36d6a0;margin:12px 0}
-.status{font-size:14px;color:#ffc45c}
-button{border:0;border-radius:9px;padding:14px;font-weight:bold;font-size:15px;margin:5px 3px}
+.status{font-size:14px;color:#ffc45c;overflow-wrap:anywhere}
+button{width:100%;border:0;border-radius:9px;padding:15px;font-weight:bold;font-size:15px;margin:6px 0}
 .start{background:#20c997;color:#071b18}
 .stop{background:#e45b67;color:white}
 .secondary{background:#34445b;color:white}
 .stat{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #34445b}
-#history{font-size:13px;line-height:1.8;max-height:180px;overflow:auto}
-.small{font-size:12px;color:#91a0b5}
+#history,#diagnostics{font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+#history{max-height:160px;overflow:auto}
+#diagnostics{max-height:150px;overflow:auto;color:#ffc45c}
 </style>
 </head>
 <body>
 
 <h2>BOOM500 CODEC HUNTER</h2>
-<div class="sub">Android Market Monitoring System</div>
+<div class="sub">Live Market Monitoring System</div>
 
 <div class="card">
-<div id="connection" class="status">DISCONNECTED</div>
-<div class="small">BOOM 500 LIVE PRICE</div>
-<div id="price" class="price">Waiting...</div>
-<div id="movement" class="sub">No market data yet</div>
+ <div id="connection" class="status">DISCONNECTED</div>
+ <div class="small">BOOM 500 LIVE PRICE</div>
+ <div id="price" class="price">Waiting...</div>
+ <div id="movement" class="sub">No market data yet</div>
 </div>
 
 <div class="card">
-<div class="stat"><span>Monitoring</span><b id="monitor">OFF</b></div>
-<div class="stat"><span>Medium spikes (+2)</span><b id="medium">0</b></div>
-<div class="stat"><span>Huge spikes (+5)</span><b id="huge">0</b></div>
-<div class="stat"><span>Last update</span><b id="updated">--</b></div>
+ <div class="stat"><span>Monitoring</span><b id="monitor">OFF</b></div>
+ <div class="stat"><span>Medium spikes (+2)</span><b id="medium">0</b></div>
+ <div class="stat"><span>Huge spikes (+5)</span><b id="huge">0</b></div>
+ <div class="stat"><span>Last update</span><b id="updated">--</b></div>
 </div>
 
 <div class="card">
-<button class="start" onclick="start()">START MONITORING</button>
-<button class="stop" onclick="stop()">STOP</button>
-<button class="secondary" onclick="testVoice()">TEST VOICE</button>
+ <button type="button" class="start" onclick="start()">START MONITORING</button>
+ <button type="button" class="stop" onclick="stop()">STOP MONITORING</button>
+ <button type="button" class="secondary" onclick="testVoice()">TEST VOICE</button>
 </div>
 
 <div class="card">
-<h3>ALERT HISTORY</h3>
-<div id="history">No alerts recorded.</div>
+ <h3>ALERT HISTORY</h3>
+ <div id="history">No alerts recorded.</div>
 </div>
 
 <div class="card">
-<h3>IMPORTANT</h3>
-<div class="small">
-This version reports spikes after they occur. It does not predict future spikes and is not a trading signal. Do not use alerts alone to place real-money trades.
+ <h3>CONNECTION DIAGNOSTICS</h3>
+ <div id="diagnostics">Waiting for connection attempt.</div>
 </div>
+
+<div class="card">
+ <h3>IMPORTANT</h3>
+ <div class="small">
+ This version detects spikes after they occur. It does not predict future spikes and is not a trading signal. Do not use alerts alone to place real-money trades.
+ </div>
 </div>
 
 <script>
@@ -65,43 +71,79 @@ let running=false;
 let previous=null;
 let mediumCount=0;
 let hugeCount=0;
-let history=[];
+let reconnectTimer=null;
+let attempts=0;
+
+function status(message){
+ document.getElementById("connection").innerText=message;
+}
+
+function log(message){
+ const box=document.getElementById("diagnostics");
+ const line=document.createElement("div");
+ line.textContent=new Date().toLocaleTimeString()+" - "+message;
+ box.prepend(line);
+ while(box.children.length>20) box.removeChild(box.lastChild);
+}
 
 function speak(message){
- if("speechSynthesis" in window){
-  speechSynthesis.cancel();
-  let speech=new SpeechSynthesisUtterance(message);
-  speech.rate=0.9;
-  speechSynthesis.speak(speech);
+ try{
+  if("speechSynthesis" in window){
+   window.speechSynthesis.cancel();
+   const voice=new SpeechSynthesisUtterance(message);
+   voice.rate=0.9;
+   window.speechSynthesis.speak(voice);
+   log("Voice announcement requested.");
+  }else{
+   log("Speech is not supported by this WebView.");
+   alert("Voice is not supported on this phone's app view.");
+  }
+ }catch(error){
+  log("Voice error: "+error.message);
+  alert("Voice error: "+error.message);
  }
 }
 
 function addHistory(message){
- let time=new Date().toLocaleTimeString();
- history.unshift(time+" - "+message);
- history=history.slice(0,30);
- document.getElementById("history").innerHTML=
- history.map(x=>"<div>"+x+"</div>").join("");
+ const box=document.getElementById("history");
+ const line=document.createElement("div");
+ line.textContent=new Date().toLocaleTimeString()+" - "+message;
+ box.prepend(line);
+ while(box.children.length>30) box.removeChild(box.lastChild);
 }
 
 function start(){
  if(running)return;
  running=true;
  previous=null;
+ attempts=0;
  document.getElementById("monitor").innerText="ON";
- document.getElementById("connection").innerText="CONNECTING...";
+ status("CONNECTING...");
+ log("Monitoring started.");
  connect();
 }
 
 function connect(){
  if(!running)return;
 
- socket=new WebSocket(
-  "wss://ws.derivws.com/websockets/v3?app_id=1089"
- );
+ attempts++;
+ status("CONNECTING... Attempt "+attempts);
+ log("Opening Deriv connection.");
+
+ try{
+  socket=new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+ }catch(error){
+  status("CONNECTION FAILED");
+  log("Could not create connection: "+error.message);
+  scheduleReconnect();
+  return;
+ }
 
  socket.onopen=function(){
-  document.getElementById("connection").innerText="CONNECTED";
+  if(!running)return;
+  status("CONNECTED - REQUESTING BOOM 500");
+  log("WebSocket opened. Requesting BOOM500 ticks.");
+
   socket.send(JSON.stringify({
    ticks:"BOOM500",
    subscribe:1
@@ -109,34 +151,36 @@ function connect(){
  };
 
  socket.onmessage=function(event){
-  let data=JSON.parse(event.data);
+  let data;
 
-  if(data.error){
-   document.getElementById("connection").innerText=
-   "ERROR: "+data.error.message;
+  try{
+   data=JSON.parse(event.data);
+  }catch(error){
+   log("Could not read server response.");
    return;
   }
 
-  if(data.tick){
-   let price=Number(data.tick.quote);
-   let change=previous===null?0:price-previous;
+  if(data.error){
+   status("DERIV ERROR: "+data.error.message);
+   log("Deriv error: "+data.error.message);
+   return;
+  }
 
-   document.getElementById("price").innerText=
-   price.toFixed(3);
+  if(data.msg_type==="tick" && data.tick){
+   const price=Number(data.tick.quote);
+   const change=previous===null?0:price-previous;
 
-   document.getElementById("movement").innerText=
-   "Tick movement: "+change.toFixed(3);
-
-   document.getElementById("updated").innerText=
-   new Date().toLocaleTimeString();
+   document.getElementById("price").innerText=price.toFixed(3);
+   document.getElementById("movement").innerText="Tick movement: "+change.toFixed(3);
+   document.getElementById("updated").innerText=new Date().toLocaleTimeString();
+   status("CONNECTED - RECEIVING LIVE PRICES");
 
    if(previous!==null && change>=5){
     hugeCount++;
     document.getElementById("huge").innerText=hugeCount;
     addHistory("HUGE SPIKE +"+change.toFixed(3));
     speak("Boom 500 huge spike detected");
-   }
-   else if(previous!==null && change>=2){
+   }else if(previous!==null && change>=2){
     mediumCount++;
     document.getElementById("medium").innerText=mediumCount;
     addHistory("MEDIUM SPIKE +"+change.toFixed(3));
@@ -148,28 +192,41 @@ function connect(){
  };
 
  socket.onerror=function(){
-  document.getElementById("connection").innerText=
-  "CONNECTION ERROR";
+  status("WEBSOCKET NETWORK ERROR");
+  log("WebSocket error. Check internet or server connection.");
  };
 
- socket.onclose=function(){
-  document.getElementById("connection").innerText=
-  "DISCONNECTED";
+ socket.onclose=function(event){
+  log("Connection closed. Code: "+event.code+
+      ". Reason: "+(event.reason || "No reason supplied"));
   if(running){
-   setTimeout(connect,5000);
+   status("DISCONNECTED - RECONNECTING");
+   scheduleReconnect();
+  }else{
+   status("STOPPED");
   }
  };
 }
 
+function scheduleReconnect(){
+ if(!running)return;
+ clearTimeout(reconnectTimer);
+ status("DISCONNECTED - RETRYING IN 5 SECONDS");
+ reconnectTimer=setTimeout(connect,5000);
+}
+
 function stop(){
  running=false;
+ clearTimeout(reconnectTimer);
  if(socket){
-  socket.onclose=null;
-  socket.close();
+  const oldSocket=socket;
   socket=null;
+  oldSocket.onclose=null;
+  oldSocket.close();
  }
  document.getElementById("monitor").innerText="OFF";
- document.getElementById("connection").innerText="STOPPED";
+ status("STOPPED");
+ log("Monitoring stopped.");
 }
 
 function testVoice(){
