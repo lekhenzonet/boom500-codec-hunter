@@ -1,0 +1,181 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boom500 Codec Hunter</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:18px;background:#101722;color:#fff;font-family:Arial,sans-serif}
+h2{color:#36d6a0;margin-bottom:4px}
+.sub{color:#91a0b5;font-size:13px}
+.card{background:#1c2939;border-radius:14px;padding:17px;margin:15px 0}
+.price{font-size:34px;font-weight:bold;color:#36d6a0;margin:12px 0}
+.status{font-size:14px;color:#ffc45c}
+button{border:0;border-radius:9px;padding:14px;font-weight:bold;font-size:15px;margin:5px 3px}
+.start{background:#20c997;color:#071b18}
+.stop{background:#e45b67;color:white}
+.secondary{background:#34445b;color:white}
+.stat{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #34445b}
+#history{font-size:13px;line-height:1.8;max-height:180px;overflow:auto}
+.small{font-size:12px;color:#91a0b5}
+</style>
+</head>
+<body>
+
+<h2>BOOM500 CODEC HUNTER</h2>
+<div class="sub">Android Market Monitoring System</div>
+
+<div class="card">
+<div id="connection" class="status">DISCONNECTED</div>
+<div class="small">BOOM 500 LIVE PRICE</div>
+<div id="price" class="price">Waiting...</div>
+<div id="movement" class="sub">No market data yet</div>
+</div>
+
+<div class="card">
+<div class="stat"><span>Monitoring</span><b id="monitor">OFF</b></div>
+<div class="stat"><span>Medium spikes (+2)</span><b id="medium">0</b></div>
+<div class="stat"><span>Huge spikes (+5)</span><b id="huge">0</b></div>
+<div class="stat"><span>Last update</span><b id="updated">--</b></div>
+</div>
+
+<div class="card">
+<button class="start" onclick="start()">START MONITORING</button>
+<button class="stop" onclick="stop()">STOP</button>
+<button class="secondary" onclick="testVoice()">TEST VOICE</button>
+</div>
+
+<div class="card">
+<h3>ALERT HISTORY</h3>
+<div id="history">No alerts recorded.</div>
+</div>
+
+<div class="card">
+<h3>IMPORTANT</h3>
+<div class="small">
+This version reports spikes after they occur. It does not predict future spikes and is not a trading signal. Do not use alerts alone to place real-money trades.
+</div>
+</div>
+
+<script>
+let socket=null;
+let running=false;
+let previous=null;
+let mediumCount=0;
+let hugeCount=0;
+let history=[];
+
+function speak(message){
+ if("speechSynthesis" in window){
+  speechSynthesis.cancel();
+  let speech=new SpeechSynthesisUtterance(message);
+  speech.rate=0.9;
+  speechSynthesis.speak(speech);
+ }
+}
+
+function addHistory(message){
+ let time=new Date().toLocaleTimeString();
+ history.unshift(time+" - "+message);
+ history=history.slice(0,30);
+ document.getElementById("history").innerHTML=
+ history.map(x=>"<div>"+x+"</div>").join("");
+}
+
+function start(){
+ if(running)return;
+ running=true;
+ previous=null;
+ document.getElementById("monitor").innerText="ON";
+ document.getElementById("connection").innerText="CONNECTING...";
+ connect();
+}
+
+function connect(){
+ if(!running)return;
+
+ socket=new WebSocket(
+  "wss://ws.derivws.com/websockets/v3?app_id=1089"
+ );
+
+ socket.onopen=function(){
+  document.getElementById("connection").innerText="CONNECTED";
+  socket.send(JSON.stringify({
+   ticks:"BOOM500",
+   subscribe:1
+  }));
+ };
+
+ socket.onmessage=function(event){
+  let data=JSON.parse(event.data);
+
+  if(data.error){
+   document.getElementById("connection").innerText=
+   "ERROR: "+data.error.message;
+   return;
+  }
+
+  if(data.tick){
+   let price=Number(data.tick.quote);
+   let change=previous===null?0:price-previous;
+
+   document.getElementById("price").innerText=
+   price.toFixed(3);
+
+   document.getElementById("movement").innerText=
+   "Tick movement: "+change.toFixed(3);
+
+   document.getElementById("updated").innerText=
+   new Date().toLocaleTimeString();
+
+   if(previous!==null && change>=5){
+    hugeCount++;
+    document.getElementById("huge").innerText=hugeCount;
+    addHistory("HUGE SPIKE +"+change.toFixed(3));
+    speak("Boom 500 huge spike detected");
+   }
+   else if(previous!==null && change>=2){
+    mediumCount++;
+    document.getElementById("medium").innerText=mediumCount;
+    addHistory("MEDIUM SPIKE +"+change.toFixed(3));
+    speak("Boom 500 medium spike detected");
+   }
+
+   previous=price;
+  }
+ };
+
+ socket.onerror=function(){
+  document.getElementById("connection").innerText=
+  "CONNECTION ERROR";
+ };
+
+ socket.onclose=function(){
+  document.getElementById("connection").innerText=
+  "DISCONNECTED";
+  if(running){
+   setTimeout(connect,5000);
+  }
+ };
+}
+
+function stop(){
+ running=false;
+ if(socket){
+  socket.onclose=null;
+  socket.close();
+  socket=null;
+ }
+ document.getElementById("monitor").innerText="OFF";
+ document.getElementById("connection").innerText="STOPPED";
+}
+
+function testVoice(){
+ speak("Boom 500 Codec Hunter is ready");
+}
+
+</script>
+</body>
+</html>
